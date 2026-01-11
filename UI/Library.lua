@@ -11,7 +11,7 @@ local gameName   = tostring(game:GetService("MarketplaceService"):GetProductInfo
 gameName         = gameName:gsub("[^%w_ ]", "")
 gameName         = gameName:gsub("%s+", "_")
 
-local ConfigFile = "ArtHub/cfg/ArtUI_" .. gameName .. ".json"
+local ConfigFile = "ArtHub/cfg/Art_" .. gameName .. ".json"
 
 ConfigData       = {}
 Elements         = {}
@@ -288,7 +288,7 @@ function ArtUI:MakeNotify(NotifyConfig)
     NotifyConfig.Title = NotifyConfig.Title or "ArtHub"
     NotifyConfig.Description = NotifyConfig.Description or "Notification"
     NotifyConfig.Content = NotifyConfig.Content or "Content"
-    NotifyConfig.Color = NotifyConfig.Color or Color3.fromRGB(255, 0, 255)
+    NotifyConfig.Color = NotifyConfig.Color or Color3.fromRGB(0, 255, 215)
     NotifyConfig.Time = NotifyConfig.Time or 0.5
     NotifyConfig.Delay = NotifyConfig.Delay or 5
     local NotifyFunction = {}
@@ -486,7 +486,7 @@ function ArtNotify(msg, delay, color, title, desc)
         Title = title or "ArtHub",
         Description = desc or "Notification",
         Content = msg or "Content",
-        Color = color or Color3.fromRGB(255, 0, 255),
+        Color = color or Color3.fromRGB(0, 255, 215),
         Delay = delay or 4
     })
 end
@@ -814,7 +814,7 @@ function ArtUI:Window(GuiConfig)
         DialogGradient.Parent = Dialog
 
         local UIStroke = Instance.new("UIStroke")
-        UIStroke.Color = Color3.fromRGB(100, 50, 150)
+        UIStroke.Color = GuiConfig.Color or Color3.fromRGB(100, 50, 150)
         UIStroke.Thickness = 2
         UIStroke.Parent = Dialog
 
@@ -930,7 +930,7 @@ function ArtUI:Window(GuiConfig)
     MainButton.Position = UDim2.new(0, 60, 0, 60)
     MainButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     MainButton.BackgroundTransparency = 0.5
-    MainButton.Image = "rbxassetid://105338847670181"
+    MainButton.Image = "rbxassetid://78868612259145"
     MainButton.Name = "ArtHubtoggle"
     MainButton.AutoButtonColor = false
     MainButton.ScaleType = Enum.ScaleType.Fit
@@ -1085,7 +1085,7 @@ end
     UICorner36.CornerRadius = UDim.new(0, 3)
     UICorner36.Parent = DropdownSelect
 
-    UIStroke14.Color = Color3.fromRGB(255, 0, 255)
+    UIStroke14.Color = Color3.fromRGB(0, 255, 215)
     UIStroke14.Thickness = 2
     UIStroke14.Transparency = 0.8
     UIStroke14.Parent = DropdownSelect
