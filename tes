@@ -1,0 +1,355 @@
+local Services = {
+    Players     = game:GetService("Players"),
+    RunService  = game:GetService("RunService"),
+    HttpService = game:GetService("HttpService"),
+    RS          = game:GetService("ReplicatedStorage"),
+    VIM         = game:GetService("VirtualInputManager"),
+    PG          = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"),
+    LocalPlayer = game:GetService("Players").LocalPlayer,
+    Camera      = workspace.CurrentCamera,
+    GuiService  = game:GetService("GuiService"),
+    CoreGui     = game:GetService("CoreGui")
+}
+
+local Modules = {
+    -- Network
+    Net                   = Services.RS.Packages._Index["sleitnick_net@0.2.0"].net,
+    Replion               = require(Services.RS.Packages.Replion),
+
+    -- Controllers
+    InputControl          = require(Services.RS.Modules.InputControl),
+    FishingController     = require(Services.RS.Controllers.FishingController),
+    ItemTradingController = require(Services.RS.Controllers.ItemTradingController),
+
+    -- Utilities
+    ItemUtility           = require(Services.RS.Shared.ItemUtility),
+    PlayerStatsUtility    = require(Services.RS.Shared.PlayerStatsUtility)
+}
+
+local Remote = {
+    -- Events (RE)
+    FishingCompleted              = Modules.Net["RE/FishingCompleted"],
+    ObtainedNewFishNotification   = Modules.Net["RE/ObtainedNewFishNotification"],
+    EquipToolFromHotbar           = Modules.Net["RE/EquipToolFromHotbar"],
+    EquipItem                     = Modules.Net["RE/EquipItem"],
+    UnequipItem                   = Modules.Net["RE/UnequipItem"],
+    ActivateEnchantingAltar       = Modules.Net["RE/ActivateEnchantingAltar"],
+    FavoriteItem                  = Modules.Net["RE/FavoriteItem"],
+
+    -- Functions (RF)
+    ChargeFishingRod              = Modules.Net["RF/ChargeFishingRod"],
+    RequestFishingMinigameStarted = Modules.Net["RF/RequestFishingMinigameStarted"],
+    CancelFishingInputs           = Modules.Net["RF/CancelFishingInputs"],
+    PurchaseWeatherEvent          = Modules.Net["RF/PurchaseWeatherEvent"],
+    UpdateAutoFishingState        = Modules.Net["RF/UpdateAutoFishingState"],
+    UpdateFishingRadar            = Modules.Net["RF/UpdateFishingRadar"],
+    PurchaseMarketItem            = Modules.Net["RF/PurchaseMarketItem"],
+    EquipOxygenTank               = Modules.Net["RF/EquipOxygenTank"],
+    UnequipOxygenTank             = Modules.Net["RF/UnequipOxygenTank"],
+    InitiateTrade                 = Modules.Net["RF/InitiateTrade"],
+}
+
+local MouseReleaseCallback = nil
+local OldRegister = Modules.InputControl.RegisterMouseReleased
+function Modules.InputControl.RegisterMouseReleased(self, param, callback)
+    MouseReleaseCallback = callback
+    return OldRegister(self, param, callback)
+end
+
+local LegitThread = nil
+
+local function ExecuteLegitFishing(enabled)
+    if LegitThread then
+        task.cancel(LegitThread); LegitThread = nil
+    end
+
+    Modules.FishingController._autoLoop = enabled
+    Modules.FishingController._autoShake = enabled
+
+    local fishingGui = Services.PG:WaitForChild("Fishing"):FindFirstChild("Main")
+    if fishingGui then fishingGui.Visible = not enabled end
+
+    if enabled then
+        LegitThread = task.spawn(function()
+            local UserId = tostring(Services.LocalPlayer.UserId)
+            local CosmeticFolder = workspace:WaitForChild("CosmeticFolder")
+            local ChargeBar = Services.PG:WaitForChild("Charge"):WaitForChild("Main"):WaitForChild("CanvasGroup")
+            :WaitForChild("Bar")
+
+            pcall(function() Remote.EquipTool:FireServer(1) end)
+            task.wait(0.5)
+
+            while enabled do
+                if not CosmeticFolder:FindFirstChild(UserId) then
+                    pcall(function() Remote.CancelFishingInputs:InvokeServer() end)
+
+                    local Center = Vector2.new(Services.Camera.ViewportSize.X / 2, Services.Camera.ViewportSize.Y / 2)
+                    pcall(function()
+                        Modules.FishingController:RequestChargeFishingRod(Center, false)
+                    end)
+
+                    local t = tick()
+                    repeat task.wait() until ChargeBar.Size.Y.Scale > 0 or (tick() - t > 2)
+
+                    local t2 = tick()
+                    while ChargeBar:IsDescendantOf(Services.PG) and ChargeBar.Size.Y.Scale < 0.93 do
+                        task.wait()
+                        if (tick() - t2 > 2) then break end
+                    end
+
+                    if MouseReleaseCallback then pcall(MouseReleaseCallback) end
+                    task.wait(1)
+                end
+
+                if Modules.FishingController._autoShake then
+                    pcall(function()
+                        Modules.FishingController:RequestFishingMinigameClick()
+                    end)
+                end
+                task.wait(0.1)
+            end
+        end)
+    else
+        pcall(function() Remote.CancelFishingInputs:InvokeServer() end)
+    end
+end
+
+local function Blatant()
+    pcall(function() Remote.CancelFishingInputs:InvokeServer() end)
+    local ServerTime = workspace:GetServerTimeNow()
+    pcall(function() Remote.ChargeFishingRod:InvokeServer(ServerTime) end)
+    pcall(function() Remote.RequestFishingMinigameStarted:InvokeServer(-1, 0.999) end)
+    task.wait(_G.BlatantBawah)
+    pcall(function() Remote.FishingCompleted:FireServer() end)
+end
+
+local function Instant()
+    pcall(function() Remote.CancelFishingInputs:InvokeServer() end)
+    local ServerTime = workspace:GetServerTimeNow()
+    pcall(function() Remote.ChargeFishingRod:InvokeServer(ServerTime) end)
+    pcall(function() Remote.RequestFishingMinigameStarted:InvokeServer(-1, 0.999) end)
+    task.wait(1)
+    pcall(function() Remote.FishingCompleted:FireServer() end)
+end
+
+local CosmeticConnection = nil
+local CosmeticFolder = workspace:WaitForChild("CosmeticFolder")
+
+local function HideEffect(enabled)
+    if CosmeticConnection then 
+        CosmeticConnection:Disconnect() 
+        CosmeticConnection = nil 
+    end
+    
+    if enabled then
+        local UserId = tostring(Services.LocalPlayer.UserId)
+        
+        -- Bersihkan yang sudah ada di folder
+        for _, obj in pairs(CosmeticFolder:GetChildren()) do
+            if obj.Name ~= UserId then 
+                obj:Destroy() 
+            end
+        end
+        
+        -- Filter otomatis untuk objek baru
+        CosmeticConnection = CosmeticFolder.ChildAdded:Connect(function(child)
+            if child.Name ~= UserId then
+                task.wait()
+                if child and child.Parent then
+                    child:Destroy()
+                end
+            end
+        end)
+    end
+end
+
+local gameName = tostring(game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+local Win      = loadstring(game:HttpGet(
+        "https://raw.githubusercontent.com/ThisiYann/ArtHub/refs/heads/main/UI/Library.lua"))()
+    :Window({
+        Title   = "ArtHun |",
+        Footer  = gameName,
+        Version = 1,
+    })
+
+local Config   = {}
+local Tabs     = {
+    Main = Win:AddTab({ Name = "Dashboard", Icon = "player" }),
+    Fishing = Win:AddTab({ Name = "Fishing", Icon = "rbxassetid://97167558235554" }),
+    Teleport = Win:AddTab({ Name = "Teleport", Icon = "gps" }),
+    Tools = Win:AddTab({ Name = "Tools", Icon = "settings" }),
+    Auto = Win:AddTab({ Name = "Auto", Icon = "next" }),
+    Trade = Win:AddTab({ Name = "Trading", Icon = "payment" }),
+    Shop = Win:AddTab({ Name = "Shop", Icon = "cart" }),
+    Webhook = Win:AddTab({ Name = "Webhook", Icon = "rbxassetid://137601480983962" }),
+}
+
+local Section  = {
+    Info = Tabs.Main:AddSection("Information"),
+
+    FishSupport = Tabs.Fishing:AddSection("Fishing Support"),
+    FishLegit = Tabs.Fishing:AddSection("Fishing Legit"),
+    FishInstant = Tabs.Fishing:AddSection("Fishing Instant"),
+    FishBlatant = Tabs.Fishing:AddSection("Fishing Blatant"),
+
+    TelePlayers = Tabs.Teleport:AddSection("Teleport Players"),
+    TeleLocation = Tabs.Teleport:AddSection("Teleport Location"),
+
+    ToolsBoost = Tabs.Tools:AddSection("Boost FPS"),
+    ToolsPlayers = Tabs.Tools:AddSection("Utility Players"),
+    ToolsHalo = Tabs.Tools:AddSection("Vip Halo Color"),
+    ToolsHideName = Tabs.Tools:AddSection("Hide Name"),
+    ToolsVisual = Tabs.Tools:AddSection("Visual"),
+    ToolsOther = Tabs.Tools:AddSection("Other Tools"),
+
+    AutoTotem = Tabs.Auto:AddSection("Totem"),
+    Auto9Totem = Tabs.Auto:AddSection("9 Totem [BETA]"),
+    AutoSell = Tabs.Auto:AddSection("Sell All"),
+    AutoWeather = Tabs.Auto:AddSection("Weather"),
+    AutoMega = Tabs.Auto:AddSection("Auto Megalodon"),
+    AutoFav = Tabs.Auto:AddSection("Auto Favorite"),
+    AutoEnchant = Tabs.Auto:AddSection("Enchants"),
+
+    AutoTradeSetting = Tabs.Trade:AddSection("Trade Settings"),
+    AutoTradeStone = Tabs.Trade:AddSection("Trade Stone"),
+    AutoTradeV1 = Tabs.Trade:AddSection("Trade By Name"),
+    AutoTradeV2 = Tabs.Trade:AddSection("Trade By Rarity"),
+
+    ShopMerchant = Tabs.Shop:AddSection("Merchant"),
+
+    WebhookConfig = Tabs.Webhook:AddSection("Settings", true),
+    WebhookCaught = Tabs.Webhook:AddSection("Caught"),
+    WebhookMonitor = Tabs.Webhook:AddSection("Monitor"),
+}
+
+
+Section.FishSupport:AddToggle({
+    Title = "Disable Fishing Effect",
+    Default = false,
+    Callback = function(val)
+        HideEffect(val)
+    end
+})
+
+Section.FishLegit:AddToggle({
+    Title = "Start Legit Fishing",
+    Default = false,
+    Callback = function(val)
+        ExecuteLegitFishing(val)
+    end
+})
+
+Section.FishLegit:AddButton({
+    Title = "Manual Fix Stuck",
+    Callback = function()
+        ExecuteLegitFishing(false)
+        pcall(function() Remote.CancelFishingInputs:InvokeServer() end)
+    end
+})
+
+_G.Instant = false
+Section.FishInstant:AddToggle({
+    Title = "Start Instant",
+    Default = _G.Instant,
+    Callback = function(is_active)
+        _G.Instant = is_active
+        if is_active then
+            Remote.EquipToolFromHotbar:FireServer(1)
+            task.spawn(function()
+                while _G.Instant do
+                    Instant()
+                    task.wait(2)
+                end
+            end)
+        end
+    end
+});
+
+_G.BlatantAtas = 1.9
+_G.BlatantBawah = 0.9
+_G.BlatantStatus = false
+
+Section.FishBlatant:AddInput({
+    Title = "Fishing Delay",
+    Value = tostring(_G.BlatantAtas),
+    Callback = function(delay) _G.BlatantAtas = tonumber(delay) or 2 end
+})
+
+Section.FishBlatant:AddInput({
+    Title = "Reel Delay",
+    Value = tostring(_G.BlatantBawah),
+    Callback = function(delay) _G.BlatantBawah = tonumber(delay) or 1 end
+})
+
+Section.FishBlatant:AddToggle({
+    Title = "Auto Blatant Fishing",
+    Default = false,
+    Callback = function(is_active)
+        _G.BlatantStatus = is_active
+
+        local S1, FishingController = pcall(function() return require(Services.RS.Controllers.FishingController) end)
+        local S2, TextController = pcall(function() return require(Services.RS.Controllers.TextNotificationController) end)
+
+        if is_active then
+            Remote.EquipToolFromHotbar:FireServer(1)
+
+            if S1 and FishingController then
+                if not Old_Charge then Old_Charge = FishingController.RequestChargeFishingRod end
+                if not Old_Cast then Old_Cast = FishingController.SendFishingRequestToServer end
+
+                FishingController.RequestChargeFishingRod = function() return end
+                FishingController.SendFishingRequestToServer = function() return false end
+
+                if not FishingController._OldGetStatus then
+                    FishingController._OldGetStatus = FishingController.GetAutoFishingState
+                end
+                FishingController.GetAutoFishingState = function() return true end
+                FishingController._autoFishingActive = true
+            end
+
+            if S2 and TextController then
+                if not TextController._OldDeliver then
+                    TextController._OldDeliver = TextController.DeliverNotification
+                end
+                TextController.DeliverNotification = function(self, data)
+                    if data and data.Text and string.find(tostring(data.Text), "Auto Fishing") then return end
+                    return TextController._OldDeliver(self, data)
+                end
+            end
+
+            task.spawn(function()
+                while _G.BlatantStatus do
+                    task.spawn(Blatant)
+                    pcall(function()
+                        Remote.UpdateAutoFishingState:InvokeServer(true)
+                        if FishingController and FishingController.UpdateUI then
+                            FishingController:UpdateUI()
+                        end
+                    end)
+
+                    task.wait(_G.BlatantAtas)
+                end
+            end)
+        else
+            pcall(function() Remote.UpdateAutoFishingState:InvokeServer(false) end)
+
+            if S1 and FishingController then
+                if Old_Charge then FishingController.RequestChargeFishingRod = Old_Charge end
+                if Old_Cast then FishingController.SendFishingRequestToServer = Old_Cast end
+                if FishingController._OldGetStatus then
+                    FishingController.GetAutoFishingState = FishingController._OldGetStatus
+                    FishingController._OldGetStatus = nil
+                end
+                FishingController._autoFishingActive = false
+            end
+
+            if S2 and TextController and TextController._OldDeliver then
+                TextController.DeliverNotification = TextController._OldDeliver
+                TextController._OldDeliver = nil
+            end
+        end
+    end
+})
+
+
+
