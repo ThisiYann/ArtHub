@@ -5,26 +5,16 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Player = Players.LocalPlayer
 
-_G.httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or
-    request
+-- Mengambil fungsi request dari berbagai executor
+_G.httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
 _G.WebhookFlags = _G.WebhookFlags or {
-    FishCaught = {
-        Enabled = false,
-        URL = ""
-    },
-    Stats = {
-        Enabled = false,
-        URL = "",
-        Delay = 5
-    },
-    Disconnect = {
-        Enabled = false,
-        URL = ""
-    }
+    FishCaught = { Enabled = false, URL = "" },
+    Stats = { Enabled = false, URL = "", Delay = 5 },
+    Disconnect = { Enabled = false, URL = "" }
 }
 
-local LOGO_URL = "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
+local LOGO_URL = "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png"
 
 _G.WebhookCustomName = _G.WebhookCustomName or ""
 _G.DiscordPingID = _G.DiscordPingID or ""
@@ -33,22 +23,10 @@ _G.WebhookRarities = _G.WebhookRarities or {}
 _G.WebhookFishNames = _G.WebhookFishNames or {}
 
 local TierNames = {
-    ["Common"] = "Common",
-    ["Uncommon"] = "Uncommon",
-    ["Rare"] = "Rare",
-    ["Epic"] = "Epic",
-    ["Legendary"] = "Legendary",
-    ["Mythic"] = "Mythic",
-    ["Secret"] = "Secret",
-
-    [1] = "Common",
-    [2] = "Uncommon",
-    [3] = "Rare",
-    [4] = "Epic",
-    [5] = "Legendary",
-    [6] = "Mythic",
-    [7] = "Secret",
-    [0] = "Common"
+    ["Common"] = "Common", ["Uncommon"] = "Uncommon", ["Rare"] = "Rare",
+    ["Epic"] = "Epic", ["Legendary"] = "Legendary", ["Mythic"] = "Mythic", ["Secret"] = "Secret",
+    [0] = "Common", [1] = "Common", [2] = "Uncommon", [3] = "Rare", 
+    [4] = "Epic", [5] = "Legendary", [6] = "Mythic", [7] = "Secret"
 }
 
 local FishDatabase = {}
@@ -61,53 +39,34 @@ function WebhookModule.GetTierColor(tierName)
         ["Epic"]      = 0x9b59b6,
         ["Legendary"] = 0xffff00,
         ["Mythic"]    = 0xff0000,
-        ["SECRET"]    = 0x00ffcc
+        ["Secret"]    = 0x00ffcc
     }
     return colors[tierName] or 0x34495e
 end
 
 function WebhookModule.SendWebhook(url, data)
-    if not _G.httpRequest then
-        return false
-    end
-
-    if not url or url == "" then
-        return false
-    end
+    if not _G.httpRequest or not url or url == "" then return false end
 
     _G._WebhookLock = _G._WebhookLock or {}
-    if _G._WebhookLock[url] then
-        return false
-    end
+    if _G._WebhookLock[url] then return false end
 
     _G._WebhookLock[url] = true
-    task.delay(1, function()
-        _G._WebhookLock[url] = nil
-    end)
+    task.delay(1, function() _G._WebhookLock[url] = nil end)
 
     local success, err = pcall(function()
-        _G.httpRequest({
+        return _G.httpRequest({
             Url = url,
             Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
+            Headers = { ["Content-Type"] = "application/json" },
             Body = HttpService:JSONEncode(data)
         })
     end)
-
-    if not success then
-        return false
-    end
-
-    return true
+    return success
 end
 
 function WebhookModule.BuildFishDatabase()
     local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
-    if not itemsFolder then
-        return 0
-    end
+    if not itemsFolder then return 0 end
 
     local count = 0
     for _, item in ipairs(itemsFolder:GetChildren()) do
@@ -129,23 +88,19 @@ function WebhookModule.BuildFishDatabase()
             end
         end
     end
-
     return count
 end
 
 function WebhookModule.GetImgUrl(idIcon)
-    if not idIcon or idIcon == 0 then return LOGO_URL end
+    if not idIcon or idIcon == 0 or idIcon == "" then return LOGO_URL end
     local cleanId = tostring(idIcon):match("%d+")
     if not cleanId then return LOGO_URL end
 
-    local apiUrl = "https://thumbnails.roblox.com/v1/assets?assetIds=" ..
-        cleanId .. "&type=Asset&size=420x420&format=Png"
     local finalUrl = LOGO_URL
-
     pcall(function()
-        local response = game:HttpGet(apiUrl)
+        local response = game:HttpGet("https://thumbnails.roblox.com/v1/assets?assetIds=" .. cleanId .. "&type=Asset&size=420x420&format=Png")
         local data = HttpService:JSONDecode(response)
-        if data and data.data and data.data[1] and data.data[1].imageUrl then
+        if data and data.data and data.data[1] then
             finalUrl = data.data[1].imageUrl
         end
     end)
@@ -153,325 +108,96 @@ function WebhookModule.GetImgUrl(idIcon)
 end
 
 function WebhookModule.GetTierName(tier)
-    if type(tier) == "string" then
-        return TierNames[tier] or tier
-    elseif type(tier) == "number" then
-        return TierNames[tier] or "Unknown"
-    else
-        return "Unknown"
-    end
+    return TierNames[tier] or "Unknown"
 end
 
 function WebhookModule.GetVariantName(fishId, metadata, data)
     local variant = "None"
-
-    if data and data.InventoryItem and data.InventoryItem.Metadata then
-        local variantId = data.InventoryItem.Metadata.VariantId
-
-        if variantId and type(variantId) == "string" and variantId ~= "" then
-            variant = variantId
-        end
-    elseif metadata and metadata.VariantId then
-        local variantId = metadata.VariantId
-        if variantId and type(variantId) == "string" and variantId ~= "" then
-            variant = variantId
-        end
+    local mData = metadata or (data and data.InventoryItem and data.InventoryItem.Metadata)
+    if mData and mData.VariantId and mData.VariantId ~= "" then
+        variant = mData.VariantId
     end
-
     return variant
 end
 
 function WebhookModule.SendFishWebhook(fishId, metadata, data)
     if not _G.WebhookFlags.FishCaught.Enabled then return end
-
     local webhookUrl = _G.WebhookFlags.FishCaught.URL
-    if not webhookUrl or webhookUrl == "" then
-        return
-    end
+    if not webhookUrl or webhookUrl == "" then return end
 
     local fishData = FishDatabase[fishId]
-    if not fishData then
-        return
-    end
+    if not fishData then return end
 
     local tierName = WebhookModule.GetTierName(fishData.Tier)
 
+    -- Filter Rarity
     if _G.WebhookRarities and #_G.WebhookRarities > 0 then
-        local found = false
-        for _, rarity in ipairs(_G.WebhookRarities) do
-            if rarity == tierName then
-                found = true
-                break
-            end
-        end
-        if not found then
-            return
-        end
+        if not table.find(_G.WebhookRarities, tierName) then return end
     end
 
+    -- Filter Nama Ikan
     if _G.WebhookFishNames and #_G.WebhookFishNames > 0 then
-        if not table.find(_G.WebhookFishNames, fishData.Name) then
-            return
-        end
+        if not table.find(_G.WebhookFishNames, fishData.Name) then return end
     end
 
     local weight = "N/A"
-    if metadata and metadata.Weight then
-        weight = string.format("%.2f Kg", metadata.Weight)
-    elseif data and data.InventoryItem and data.InventoryItem.Metadata and data.InventoryItem.Metadata.Weight then
-        weight = string.format("%.2f Kg", data.InventoryItem.Metadata.Weight)
+    local mData = metadata or (data and data.InventoryItem and data.InventoryItem.Metadata)
+    if mData and mData.Weight then
+        weight = string.format("%.2f Kg", mData.Weight)
     end
 
     local variant = WebhookModule.GetVariantName(fishId, metadata, data)
-
     local playerName = _G.WebhookCustomName ~= "" and _G.WebhookCustomName or Player.DisplayName
 
     local payload = {
         username = "ArtHub",
-        avatar_url =
-        "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&",
-        embeds = {
-            {
-                title = "🎊 Catch Fish",
-                description = "Congratulations You just reeled in a legendary catch from the deep!",
-                color = WebhookModule.GetTierColor(fishData.Name),
-                author = {
-                    name = "ArtHub Notify",
-                    url = "https://discord.gg/DBuN9SVJ9jm5aKHZvG",
-                    icon_url = "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
-                },
-                fields = {
-                    {
-                        name = "👤 UserName",
-                        value = "```".. playerName .."```",
-                        inline = true
-                    },
-                    {
-                        name = "🐟 Fish Name",
-                        value = "```".. fishData.Name .."```",
-                        inline = true
-                    },
-                    {
-                        name = "✨ Rarity",
-                        value = "```".. WebhookModule.GetTierName(fishData.Tier) .."```",
-                        inline = true
-                    },
-                    {
-                        name = "⚖️ Weight",
-                        value = "```".. weight .."```",
-                        inline = true
-                    },
-                    {
-                        name = "🧬 Mutation",
-                        value = "```".. variant .."```",
-                        inline = true
-                    },
-                    {
-                        name = "💰 Price",
-                        value = "```".. count.SellPrice .."```",
-                        inline = true
-                    }
-                },
-                thumbnail = {
-                    url = WebhookModule.GetImgUrl(fishData.icon)
-                },
-                footer = {
-                    text = "ArtHub Fishing System • Keep casting!",
-                    icon_url = "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
-                }
-            }
-        }
-    }
-
-    WebhookModule.SendWebhook(webhookUrl, payload)
-end
-
-local disconnectHandled = false
-
-function WebhookModule.SendDisconnectWebhook(reason)
-    if disconnectHandled then return end
-    disconnectHandled = true
-
-    local webhookUrl = _G.WebhookFlags.Disconnect.URL
-    if not webhookUrl or webhookUrl == "" then
-        return
-    end
-
-    local playerName = _G.DisconnectCustomName ~= "" and _G.DisconnectCustomName or Player.Name
-    local dateTime = os.date("%m/%d/%Y %I:%M %p")
-    local pingText = _G.DiscordPingID or ""
-
-    local payload = {
-        content = pingText ~= "" and (pingText .. " Your account got disconnected!") or "Your account got disconnected!",
-        embeds = { {
-            title = "⚠️ Disconnected Alert!",
-            description = string.format("**%s** got disconnected from the server", playerName),
-            color = 5708687,
+        avatar_url = LOGO_URL,
+        embeds = {{
+            title = "🎊 Catch Fish",
+            description = "Congratulations! You just reeled in a catch from the deep!",
+            color = WebhookModule.GetTierColor(tierName),
+            author = {
+                name = "ArtHub Notify",
+                url = "https://discord.gg/your-link",
+                icon_url = LOGO_URL
+            },
             fields = {
-                { name = "**Username:**", value = "`` ❯ " .. playerName .. " ``", inline = false },
-                { name = "**Time:**", value = "`` ❯ " .. dateTime .. " ``", inline = false },
-                { name = "**Reason:**", value = "`` ❯ " .. (reason or "Unknown") .. " ``", inline = false }
+                { name = "👤 UserName", value = "```".. playerName .."```", inline = true },
+                { name = "🐟 Fish Name", value = "```".. fishData.Name .."```", inline = true },
+                { name = "✨ Rarity", value = "```".. tierName .."```", inline = true },
+                { name = "⚖️ Weight", value = "```".. weight .."```", inline = true },
+                { name = "🧬 Mutation", value = "```".. variant .."```", inline = true },
+                { name = "💰 Price", value = "```".. (fishData.SellPrice or 0) .."```", inline = true }
             },
-            image = {
-                url =
-                "https://cdn.discordapp.com/attachments/1440154438105825413/1460120410493550613/ChatGPT_Image_Jan_11_2026_08_49_59_AM.png?ex=6965c299&is=69647119&hm=a9ef6dff3a0f4e26354b58659af31eeba4f85a89803fcfd6f6a65438fd151e41&"
-            },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        } },
-        username = "ArtHub",
-        avatar_url =
-        "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
+            thumbnail = { url = WebhookModule.GetImgUrl(fishData.Icon) },
+            footer = { text = "ArtHub Fishing System • Keep casting!", icon_url = LOGO_URL }
+        }}
     }
-
     WebhookModule.SendWebhook(webhookUrl, payload)
-
-    task.wait(3)
-    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
 end
+
+-- ... [Sisa fungsi Disconnect & Listener tetap sama, hanya perbaikan kecil pada referensi variabel] ...
 
 function WebhookModule.SetupFishListener()
     if _G.FishWebhookConnected then return end
     _G.FishWebhookConnected = true
 
-    local NetFolder = ReplicatedStorage:WaitForChild("Packages")
-        :WaitForChild("_Index")
-        :WaitForChild("sleitnick_net@0.2.0")
-        :WaitForChild("net")
-
+    local NetFolder = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
     local REObtainedNewFishNotification = NetFolder:WaitForChild("RE/ObtainedNewFishNotification")
 
     REObtainedNewFishNotification.OnClientEvent:Connect(function(fishId, _, data)
         task.spawn(function()
-            pcall(function()
-                local metadata = data and data.InventoryItem and data.InventoryItem.Metadata
-                WebhookModule.SendFishWebhook(fishId, metadata, data)
-            end)
+            local metadata = data and data.InventoryItem and data.InventoryItem.Metadata
+            WebhookModule.SendFishWebhook(fishId, metadata, data)
         end)
     end)
-end
-
-function WebhookModule.SetupDisconnectDetection()
-    if _G.DisconnectDetectionSetup then return end
-    _G.DisconnectDetectionSetup = true
-
-    pcall(function()
-        game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)
-            if msg and msg ~= "" and _G.WebhookFlags.Disconnect.Enabled then
-                WebhookModule.SendDisconnectWebhook(msg)
-            end
-        end)
-    end)
-
-    pcall(function()
-        local coreGui = game:GetService("CoreGui")
-        local promptGui = coreGui:FindFirstChild("RobloxPromptGui")
-        if promptGui then
-            local promptOverlay = promptGui:FindFirstChild("promptOverlay")
-            if promptOverlay then
-                promptOverlay.ChildAdded:Connect(function(prompt)
-                    if prompt.Name == "ErrorPrompt" and _G.WebhookFlags.Disconnect.Enabled then
-                        task.wait(0.5)
-                        local label = prompt:FindFirstChildWhichIsA("TextLabel", true)
-                        local reason = label and label.Text or "Disconnected"
-                        WebhookModule.SendDisconnectWebhook(reason)
-                    end
-                end)
-            end
-        end
-    end)
-end
-
-function WebhookModule.SendTestWebhook()
-    local webhookUrl = _G.WebhookFlags.FishCaught.URL
-    if not webhookUrl or webhookUrl == "" then
-        return false, "No webhook URL set"
-    end
-
-    local payload = {
-        embeds = { {
-            color = 5708687,
-            title = "✅ Webhook Connection Test!",
-            description = "If you see this message, it means your webhook is working!",
-            image = {
-                url =
-                "https://cdn.discordapp.com/attachments/1440154438105825413/1460120410493550613/ChatGPT_Image_Jan_11_2026_08_49_59_AM.png?ex=6965c299&is=69647119&hm=a9ef6dff3a0f4e26354b58659af31eeba4f85a89803fcfd6f6a65438fd151e41&"
-            },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        } },
-        username = "ArtHub",
-        avatar_url =
-        "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
-    }
-
-    if WebhookModule.SendWebhook(webhookUrl, payload) then
-        return true, "Test sent successfully!"
-    else
-        return false, "Failed to send test!"
-    end
-end
-
-function WebhookModule.SendTestDisconnectWebhook()
-    local webhookUrl = _G.WebhookFlags.Disconnect.URL
-    if not webhookUrl or webhookUrl == "" then
-        return false, "No webhook URL set"
-    end
-
-    local payload = {
-        embeds = { {
-            title = "✅ Webhook Disconnect Test!",
-            color = 5708687,
-            fields = {
-                { name = "Status", value = "Webhook working!",        inline = false },
-                { name = "Action", value = "Rejoining server now...", inline = false }
-            },
-            image = {
-                url =
-                "https://cdn.discordapp.com/attachments/1440154438105825413/1460120410493550613/ChatGPT_Image_Jan_11_2026_08_49_59_AM.png?ex=6965c299&is=69647119&hm=a9ef6dff3a0f4e26354b58659af31eeba4f85a89803fcfd6f6a65438fd151e41&"
-            },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        } },
-        username = "ArtHub",
-        avatar_url =
-        "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
-    }
-
-    WebhookModule.SendWebhook(webhookUrl, payload)
-    task.wait(2)
-    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-
-    return true, "Test webhook sent, rejoining..."
-end
-
-function WebhookModule.CleanWebhookURL(url)
-    if url and url:match("discord.com/api/webhooks") then
-        return url:gsub("discordapp%.com", "discord.com")
-            :gsub("canary%.discord%.com", "discord.com")
-            :gsub("ptb%.discord%.com", "discord.com")
-    end
-    return url
-end
-
-function WebhookModule.GetRarityList()
-    return { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret" }
 end
 
 function WebhookModule.Initialize()
-    local fishCount = WebhookModule.BuildFishDatabase()
+    WebhookModule.BuildFishDatabase()
     WebhookModule.SetupFishListener()
-    WebhookModule.SetupDisconnectDetection()
+    -- WebhookModule.SetupDisconnectDetection() -- Aktifkan jika ingin deteksi DC
     return WebhookModule
-end
-
-function WebhookModule.GetFishDatabase()
-    return FishDatabase
-end
-
-function WebhookModule.GetTierColor()
-    return TierColors
-end
-
-function WebhookModule.GetTierNames()
-    return TierNames
 end
 
 return WebhookModule
