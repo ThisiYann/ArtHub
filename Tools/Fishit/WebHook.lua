@@ -131,14 +131,23 @@ function WebhookModule.BuildFishDatabase()
     return count
 end
 
-function WebhookModule.GetThumbnailURL(assetId)
-    if not assetId or assetId == "" then return nil end
+function WebhookModule.GetImgUrl(idIcon)
+    if not idIcon or idIcon == 0 then return LOGO_URL end
+    local cleanId = tostring(idIcon):match("%d+")
+    if not cleanId then return LOGO_URL end
 
-    local id = assetId:match("rbxassetid://(%d+)") or assetId:match("(%d+)")
+    local apiUrl = "https://thumbnails.roblox.com/v1/assets?assetIds=" ..
+        cleanId .. "&type=Asset&size=420x420&format=Png"
+    local finalUrl = LOGO_URL
 
-    if not id then return nil end
-
-    return string.format("https://www.roblox.com/Thumbs/Asset.ashx?width=420&height=420&assetId=%s", id)
+    pcall(function()
+        local response = game:HttpGet(apiUrl)
+        local data = HttpService:JSONDecode(response)
+        if data and data.data and data.data[1] and data.data[1].imageUrl then
+            finalUrl = data.data[1].imageUrl
+        end
+    end)
+    return finalUrl
 end
 
 function WebhookModule.GetTierName(tier)
@@ -227,7 +236,7 @@ function WebhookModule.SendFishWebhook(fishId, metadata, data)
                 { name = "**Variant:**", value = "`` ❯ " .. variant .. " ``", inline = true }
             },
             thumbnail = {
-                url = WebhookModule.GetThumbnailURL(fishData.Icon) or
+                url = WebhookModule.GetImgUrl(fishData.Icon) or
                 "https://cdn.discordapp.com/attachments/1387681189502124042/1449753201044750336/banners_pinterest_654429389618926022.jpg"
             },
             image = {
@@ -246,80 +255,6 @@ function WebhookModule.SendFishWebhook(fishId, metadata, data)
 
     WebhookModule.SendWebhook(webhookUrl, payload)
 end
-
---[[function WebhookModule.SendFishWebhook(fishId, metadata, data)
-    if not _G.WebhookFlags.FishCaught.Enabled then return end
-
-    local webhookUrl = _G.WebhookFlags.FishCaught.URL
-    if not webhookUrl or webhookUrl == "" then
-        return
-    end
-
-    local fishData = FishDatabase[fishId]
-    if not fishData then
-        return
-    end
-
-    local tierName = WebhookModule.GetTierName(fishData.Tier)
-
-    if _G.WebhookRarities and #_G.WebhookRarities > 0 then
-        local found = false
-        for _, rarity in ipairs(_G.WebhookRarities) do
-            if rarity == tierName then
-                found = true
-                break
-            end
-        end
-        if not found then
-            return
-        end
-    end
-
-    if _G.WebhookFishNames and #_G.WebhookFishNames > 0 then
-        if not table.find(_G.WebhookFishNames, fishData.Name) then
-            return
-        end
-    end
-
-    local weight = "N/A"
-    if metadata and metadata.Weight then
-        weight = string.format("%.2f Kg", metadata.Weight)
-    elseif data and data.InventoryItem and data.InventoryItem.Metadata and data.InventoryItem.Metadata.Weight then
-        weight = string.format("%.2f Kg", data.InventoryItem.Metadata.Weight)
-    end
-
-    local variant = WebhookModule.GetVariantName(fishId, metadata, data)
-
-    local playerName = _G.WebhookCustomName ~= "" and _G.WebhookCustomName or Player.Name
-
-    local payload = {
-        embeds = {{
-            title = "🎣 FISH CAUGHT",
-            description = string.format("**%s** caught a **%s** fish!", playerName, tierName),
-            color = 5708687,
-            fields = {
-                {name = "**Fish:**", value = "`` ❯ " .. fishData.Name .. " ``", inline = false},
-                {name = "**Tier:**", value = "`` ❯ " .. tierName .. " ``", inline = false},
-                {name = "**Weight:**", value = "`` ❯ " .. weight .. " ``", inline = true},
-                {name = "**Variant:**", value = "`` ❯ " .. variant .. " ``", inline = true}
-            },
-            thumbnail = {
-                url = WebhookModule.GetThumbnailURL(fishData.Icon) or "https://cdn.discordapp.com/attachments/1387681189502124042/1449753201044750336/banners_pinterest_654429389618926022.jpg"
-            },
-            image = {
-                url = "https://cdn.discordapp.com/attachments/1440154438105825413/1460120410493550613/ChatGPT_Image_Jan_11_2026_08_49_59_AM.png?ex=6965c299&is=69647119&hm=a9ef6dff3a0f4e26354b58659af31eeba4f85a89803fcfd6f6a65438fd151e41&"
-            },
-            footer = {
-                text = "@ArtHub | WebHook",
-            },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        }},
-        username = "ArtHub",
-        avatar_url = "https://cdn.discordapp.com/attachments/1440154438105825413/1459710099596640296/content.png?ex=696595f7&is=69644477&hm=54e35ef90afdf68f9d0034338fa168ac0894e299c7bcf014159387fd48d582b5&"
-    }
-
-    WebhookModule.SendWebhook(webhookUrl, payload)
-end]]
 
 local disconnectHandled = false
 
